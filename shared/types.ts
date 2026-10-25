@@ -102,6 +102,12 @@ export type SaveFileResult = {
   error?: string
 }
 
+export type FileOpResult = {
+  ok: boolean
+  path?: string
+  error?: string
+}
+
 export type ProjectFileEntry = {
   name: string
   path: string
@@ -148,6 +154,10 @@ export type HubApi = {
       defaultPath?: string
     }) => Promise<SaveFileResult>
     read: (filePath: string) => Promise<{ ok: boolean; content?: string; error?: string }>
+    rename: (filePath: string, newName: string) => Promise<FileOpResult>
+    create: (dirPath: string, name: string) => Promise<FileOpResult>
+    trash: (filePath: string) => Promise<FileOpResult>
+    reveal: (filePath: string) => Promise<void>
   }
   pty: {
     create: (options: PtyCreateOptions) => Promise<{ id: string }>

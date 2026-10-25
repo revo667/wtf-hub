@@ -116,6 +116,10 @@ export async function createBridgeApi(): Promise<HubApi> {
       open: (defaultPath) => rpc('files.open', { defaultPath }),
       save: (options) => rpc('files.save', options),
       read: (filePath) => rpc('files.read', { filePath }),
+      rename: (filePath, newName) => rpc('files.rename', { filePath, newName }),
+      create: (dirPath, name) => rpc('files.create', { dirPath, name }),
+      trash: (filePath) => rpc('files.trash', { filePath }),
+      reveal: (filePath) => rpc('files.reveal', { filePath }),
     },
     pty: {
       create: (options: PtyCreateOptions) => rpc('pty.create', options),

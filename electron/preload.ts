@@ -35,6 +35,10 @@ const api: HubApi = {
     open: (defaultPath) => ipcRenderer.invoke('files:open', defaultPath),
     save: (options) => ipcRenderer.invoke('files:save', options),
     read: (filePath) => ipcRenderer.invoke('files:read', filePath),
+    rename: (filePath, newName) => ipcRenderer.invoke('files:rename', filePath, newName),
+    create: (dirPath, name) => ipcRenderer.invoke('files:create', dirPath, name),
+    trash: (filePath) => ipcRenderer.invoke('files:trash', filePath),
+    reveal: (filePath) => ipcRenderer.invoke('files:reveal', filePath),
   },
   pty: {
     create: (options: PtyCreateOptions) => ipcRenderer.invoke('pty:create', options),

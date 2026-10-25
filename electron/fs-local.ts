@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import type { ProjectFileEntry } from '../shared/types'
+import type { FileOpResult, ProjectFileEntry } from '../shared/types'
 
 const SKIP_DIRS = new Set([
   '.git',
@@ -73,5 +73,52 @@ export function readTextFile(filePath: string): { ok: boolean; content?: string;
     return { ok: true, content: fs.readFileSync(filePath, 'utf8') }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'Failed to read file' }
+  }
+}
+
+export function isInsideRoot(root: string, target: string): boolean {
+  const relative = path.relative(path.resolve(root), path.resolve(target))
+  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
+}
+
+export function createFile(root: string, dirPath: string, name: string): FileOpResult {
+  const relative = name.trim().replace(/\\/g, '/')
+  if (!relative || relative.endsWith('/') || relative.split('/').some((part) => part === '..')) {
+    return { ok: false, error: 'Invalid name' }
+  }
+  const target = path.resolve(dirPath, relative)
+  if (!isInsideRoot(root, target) || !isInsideRoot(dirPath, target)) {
+    return { ok: false, error: 'Path is outside the project' }
+  }
+  if (fs.existsSync(target)) {
+    return { ok: false, error: `${relative} already exists` }
+  }
+  try {
+    fs.mkdirSync(path.dirname(target), { recursive: true })
+    fs.writeFileSync(target, '', { flag: 'wx' })
+    return { ok: true, path: target }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Failed to create file' }
+  }
+}
+
+export function renamePath(root: string, filePath: string, newName: string): FileOpResult {
+  const name = newName.trim()
+  if (!name || name === '.' || name === '..' || /[\\/]/.test(name)) {
+    return { ok: false, error: 'Invalid name' }
+  }
+  if (!isInsideRoot(root, filePath)) {
+    return { ok: false, error: 'Path is outside the projects root' }
+  }
+  const target = path.join(path.dirname(filePath), name)
+  if (target === filePath) return { ok: true, path: target }
+  if (fs.existsSync(target)) {
+    return { ok: false, error: `${name} already exists` }
+  }
+  try {
+    fs.renameSync(filePath, target)
+    return { ok: true, path: target }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Failed to rename' }
   }
 }

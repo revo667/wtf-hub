@@ -409,6 +409,10 @@ function createMockApi(): HubApi {
         }
         return { ok: false, error: 'Browser preview mode' }
       },
+      rename: async () => ({ ok: false, error: 'Browser preview mode' }),
+      create: async () => ({ ok: false, error: 'Browser preview mode' }),
+      trash: async () => ({ ok: false, error: 'Browser preview mode' }),
+      reveal: async () => undefined,
     },
     pty: {
       create: async (options: PtyCreateOptions) => {

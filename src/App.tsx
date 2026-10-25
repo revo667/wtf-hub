@@ -171,8 +171,8 @@ export default function App() {
     widgetsOpen,
   ])
 
-  const openTerminal = useCallback(() => {
-    const project = activeProject
+  const openTerminal = useCallback((target?: ProjectInfo) => {
+    const project = target ?? activeProject
     const term: TermWindow = {
       id: createTermId(),
       title: project?.name ?? `term-${terminalsRef.current.length + 1}`,
@@ -551,6 +551,14 @@ export default function App() {
                 onOpenFile={(file, project) => {
                   void handleOpenProjectFile(file, project)
                 }}
+                onOpenTerminal={(project) => {
+                  setActiveProject(project)
+                  openTerminal(project)
+                }}
+                onChanged={() => {
+                  void refresh()
+                }}
+                onNotify={showToast}
               />
             </WindowFrame>
           )}

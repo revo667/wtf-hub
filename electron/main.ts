@@ -3,7 +3,15 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { detectCliTools, findEditorCommand } from './cli'
-import { listProjectFiles, openTextFile, readTextFile, saveTextFile } from './files'
+import {
+  createFile,
+  isInsideRoot,
+  listProjectFiles,
+  openTextFile,
+  readTextFile,
+  renamePath,
+  saveTextFile,
+} from './files'
 import {
   configureMusic,
   connectMusicService,
@@ -215,6 +223,30 @@ function registerIpc(): void {
   )
 
   ipcMain.handle('files:read', (_event, filePath: string) => readTextFile(filePath))
+
+  ipcMain.handle('files:rename', (_event, filePath: string, newName: string) =>
+    renamePath(settings.projectsRoot, filePath, newName),
+  )
+
+  ipcMain.handle('files:create', (_event, dirPath: string, name: string) =>
+    createFile(settings.projectsRoot, dirPath, name),
+  )
+
+  ipcMain.handle('files:trash', async (_event, filePath: string) => {
+    if (!isInsideRoot(settings.projectsRoot, filePath)) {
+      return { ok: false, error: 'Path is outside the projects root' }
+    }
+    try {
+      await shell.trashItem(filePath)
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : 'Failed to move to trash' }
+    }
+  })
+
+  ipcMain.handle('files:reveal', (_event, filePath: string) => {
+    shell.showItemInFolder(filePath)
+  })
 }
 
 app.whenReady().then(() => {

@@ -3,7 +3,13 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { OpenFileResult, SaveFileResult } from '../shared/types'
 
-export { listProjectFiles, readTextFile } from './fs-local'
+export {
+  createFile,
+  isInsideRoot,
+  listProjectFiles,
+  readTextFile,
+  renamePath,
+} from './fs-local'
 
 const TEXT_FILTERS = [
   {

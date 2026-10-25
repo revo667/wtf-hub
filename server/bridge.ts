@@ -9,7 +9,13 @@ import path from 'node:path'
 import { WebSocketServer, type WebSocket } from 'ws'
 import * as pty from 'node-pty'
 import { detectCliTools } from '../electron/cli'
-import { listProjectFiles, readTextFile } from '../electron/fs-local'
+import {
+  createFile,
+  isInsideRoot,
+  listProjectFiles,
+  readTextFile,
+  renamePath,
+} from '../electron/fs-local'
 import { ensureHubShellInit } from '../electron/hub-prompt'
 import { enrichedPath } from '../electron/path-env'
 import { scanProjects } from '../electron/projects'
@@ -134,6 +140,41 @@ async function handleRpc(method: string, params: unknown): Promise<unknown> {
       return detectCliTools(settings)
     case 'files.read':
       return readTextFile(String((params as { filePath: string }).filePath))
+    case 'files.rename': {
+      const { filePath, newName } = params as { filePath: string; newName: string }
+      return renamePath(settings.projectsRoot, String(filePath), String(newName))
+    }
+    case 'files.create': {
+      const { dirPath, name } = params as { dirPath: string; name: string }
+      return createFile(settings.projectsRoot, String(dirPath), String(name))
+    }
+    case 'files.trash': {
+      const filePath = String((params as { filePath: string }).filePath)
+      if (!isInsideRoot(settings.projectsRoot, filePath)) {
+        return { ok: false, error: 'Path is outside the projects root' }
+      }
+      if (process.platform !== 'darwin') {
+        return { ok: false, error: 'Move to trash is available in Electron' }
+      }
+      const trashDir = path.join(os.homedir(), '.Trash')
+      let target = path.join(trashDir, path.basename(filePath))
+      if (fs.existsSync(target)) {
+        target = path.join(trashDir, `${path.basename(filePath)} ${Date.now()}`)
+      }
+      try {
+        fs.renameSync(filePath, target)
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : 'Failed to move to trash' }
+      }
+    }
+    case 'files.reveal': {
+      const filePath = String((params as { filePath: string }).filePath)
+      const { spawn } = await import('node:child_process')
+      if (process.platform === 'darwin') spawn('open', ['-R', filePath], { detached: true })
+      else spawn('xdg-open', [path.dirname(filePath)], { detached: true })
+      return undefined
+    }
     case 'files.open':
       return { canceled: true, error: 'File dialog needs Electron — use project file list' }
     case 'files.save':

@@ -2,7 +2,9 @@ import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
+import { ClipboardPaste, Copy, Delete, Eraser, Scissors, TextSelect } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { ContextMenu, useContextMenu, type ContextMenuItem } from '@/components/ContextMenu'
 import { getHub } from '@/lib/hub-client'
 
 type TerminalPaneProps = {
@@ -12,6 +14,34 @@ type TerminalPaneProps = {
   onBindPty: (ptyId: string) => void
 }
 
+function editableSelection(term: Terminal) {
+  const range = term.getSelectionPosition()
+  if (!range) return null
+  const buffer = term.buffer.active
+  const cursorRow = buffer.baseY + buffer.cursorY
+  if (range.start.y !== cursorRow || range.end.y !== cursorRow) return null
+  return { start: range.start.x, end: range.end.x, cursor: buffer.cursorX }
+}
+
+function eraseSelection(term: Terminal, write: (data: string) => void) {
+  const range = editableSelection(term)
+  if (!range || range.end <= range.start) return
+  const shift = range.end - range.cursor
+  const move = shift > 0 ? '\x1b[C'.repeat(shift) : '\x1b[D'.repeat(-shift)
+  write(move + '\x7f'.repeat(range.end - range.start))
+  term.clearSelection()
+}
+
+async function copySelection(term: Terminal) {
+  const text = term.getSelection()
+  if (!text) return
+  await navigator.clipboard.writeText(text)
+}
+
+function writeToPty(ptyId: string | null, data: string) {
+  if (ptyId) void getHub().pty.write(ptyId, data)
+}
+
 export function TerminalPane({ cwd, ptyId, active, onBindPty }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const termRef = useRef<Terminal | null>(null)
@@ -19,6 +49,7 @@ export function TerminalPane({ cwd, ptyId, active, onBindPty }: TerminalPaneProp
   const ptyIdRef = useRef<string | null>(ptyId)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { menu, open: openMenu, close: closeMenu } = useContextMenu()
 
   useEffect(() => {
     ptyIdRef.current = ptyId
@@ -75,6 +106,7 @@ export function TerminalPane({ cwd, ptyId, active, onBindPty }: TerminalPaneProp
         brightWhite: '#e8ebe8',
       },
       allowProposedApi: true,
+      rightClickSelectsWord: false,
     })
 
     const fit = new FitAddon()
@@ -82,6 +114,78 @@ export function TerminalPane({ cwd, ptyId, active, onBindPty }: TerminalPaneProp
     term.loadAddon(new WebLinksAddon())
     term.open(containerRef.current)
     fit.fit()
+
+    const write = (data: string) => writeToPty(ptyIdRef.current, data)
+
+    term.attachCustomKeyEventHandler((event) => {
+      if (event.type !== 'keydown' || !event.metaKey) return true
+      const key = event.key.toLowerCase()
+      if (key === 'k') {
+        term.clear()
+        return false
+      }
+      if (key === 'c' && term.hasSelection()) {
+        void copySelection(term)
+        return false
+      }
+      if (key === 'x' && term.hasSelection()) {
+        void copySelection(term).then(() => eraseSelection(term, write))
+        return false
+      }
+      return true
+    })
+
+    const container = containerRef.current
+    const onContextMenu = (event: MouseEvent) => {
+      const hasSelection = term.hasSelection()
+      const canEdit = Boolean(ptyIdRef.current)
+      const editable = hasSelection && editableSelection(term) !== null
+      const items: ContextMenuItem[] = [
+        {
+          label: 'Copy',
+          icon: Copy,
+          shortcut: '⌘C',
+          disabled: !hasSelection,
+          onSelect: () => {
+            void copySelection(term)
+          },
+        },
+        {
+          label: 'Cut',
+          icon: Scissors,
+          shortcut: '⌘X',
+          disabled: !editable || !canEdit,
+          onSelect: () => {
+            void copySelection(term).then(() => eraseSelection(term, write))
+          },
+        },
+        {
+          label: 'Paste',
+          icon: ClipboardPaste,
+          shortcut: '⌘V',
+          disabled: !canEdit,
+          onSelect: () => {
+            void navigator.clipboard.readText().then((text) => {
+              if (text) term.paste(text)
+            })
+          },
+        },
+        {
+          label: editable ? 'Delete' : 'Delete line',
+          icon: Delete,
+          disabled: !canEdit || (hasSelection && !editable),
+          onSelect: () => {
+            if (editable) eraseSelection(term, write)
+            else write('\x05\x15')
+          },
+        },
+        { type: 'separator' },
+        { label: 'Select all', icon: TextSelect, onSelect: () => term.selectAll() },
+        { label: 'Clear terminal', icon: Eraser, shortcut: '⌘K', onSelect: () => term.clear() },
+      ]
+      openMenu(event, items)
+    }
+    container.addEventListener('contextmenu', onContextMenu, true)
 
     term.onData((data) => {
       const id = ptyIdRef.current
@@ -103,12 +207,13 @@ export function TerminalPane({ cwd, ptyId, active, onBindPty }: TerminalPaneProp
     observer.observe(containerRef.current)
 
     return () => {
+      container.removeEventListener('contextmenu', onContextMenu, true)
       observer.disconnect()
       term.dispose()
       termRef.current = null
       fitRef.current = null
     }
-  }, [])
+  }, [openMenu])
 
   useEffect(() => {
     if (!ready || !termRef.current || !fitRef.current) return
@@ -161,6 +266,13 @@ export function TerminalPane({ cwd, ptyId, active, onBindPty }: TerminalPaneProp
         </div>
       )}
       <div ref={containerRef} className="terminal-host h-full w-full p-2" />
+      <ContextMenu
+        menu={menu}
+        onClose={() => {
+          closeMenu()
+          termRef.current?.focus()
+        }}
+      />
     </div>
   )
 }
