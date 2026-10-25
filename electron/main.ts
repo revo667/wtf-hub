@@ -57,6 +57,7 @@ function createWindow(): void {
     height: 900,
     minWidth: 960,
     minHeight: 640,
+    fullscreen: true,
     backgroundColor: '#0a0c0a',
     title: 'WTF HUB',
     ...(icon ? { icon } : {}),
